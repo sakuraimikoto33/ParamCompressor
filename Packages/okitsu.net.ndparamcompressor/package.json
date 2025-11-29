@@ -6,8 +6,8 @@
   "description": "Compress VRChat synchronization parameters to reduce network usage.",
   "vrchatVersion": "2022.1.1",
   "vpmDependencies" : {
-    "com.vrchat.avatars" : "^3.8.x",
-    "nadena.dev.ndmf" : "^1.9.x"
+    "com.vrchat.avatars" : ">=3.8.x",
+    "nadena.dev.ndmf" : ">=1.9.x"
   },
   "author": {
     "name": "sakuraimikoto33"
