@@ -1,0 +1,16 @@
+{
+  "name": "okitsu.net.ndparamcompressor.runtime",
+  "rootNamespace": "okitsu.net.ndparamcompressor.Runtime",
+  "references": [
+    "VRC.SDKBase"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

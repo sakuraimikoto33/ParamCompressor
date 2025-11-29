@@ -1,0 +1,29 @@
+{
+  "name": "okitsu.net.ndparamcompressor.editor",
+  "rootNamespace": "okitsu.net.ndparamcompressor.Editor",
+  "references": [
+    "okitsu.net.ndparamcompressor.runtime",
+    "VRC.SDK3A",
+    "VRC.SDKBase",
+    "nadena.dev.ndmf.runtime",
+    "nadena.dev.ndmf",
+    "nadena.dev.modular-avatar.core"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [
+    {
+      "name": "com.vrcfury.vrcfury",
+      "expression": "",
+      "define": "VRCFURY"
+    }
+  ],
+  "noEngineReferences": false
+}
