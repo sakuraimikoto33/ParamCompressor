@@ -1,7 +1,7 @@
 {
   "name": "okitsu.net.ndparamcompressor",
   "displayName": "Parameter Compressor",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "unity": "2022.3",
   "description": "Compress VRChat synchronization parameters to reduce network usage.",
   "vrchatVersion": "2022.1.1",
@@ -11,5 +11,7 @@
   },
   "author": {
     "name": "sakuraimikoto33"
-  }
+  },
+  "license": "MIT",
+  "licensesUrl": "https://github.com/sakuraimikoto33/ParamCompressor/blob/main/LICENSE"
 }
