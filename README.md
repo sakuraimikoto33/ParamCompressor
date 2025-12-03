@@ -7,10 +7,9 @@ VRChat アバター用のパラメータ圧縮ツール（Based on Laura's Param
 ND Parameter Compressor は、VRChat アバターの Expression Parameters のメモリ使用量を最適化するための NDMF プラグインです。複数のパラメータを効率的にバッチ処理することで、メモリコストを削減します。
 ## インストール
 
-1. VCC（VRChat Creator Companion）を開く
-2. Settings → Packages → Add Repository から https://vpm.okitsu.net/index.json を追加
-3. Manage Project でプロジェクトを開き、「ND Parameter Compressor」を追加
-4. 依存関係として [NDMF](https://github.com/bdunderscore/ndmf) が自動的にインストールされます
+1. [NDMF](https://ndmf.nadena.dev/) や [Modular Avatar](https://modular-avatar.nadena.dev/) 等をインストールしていない場合は、[`https://vpm.nadena.dev/vpm.json`](vcc://vpm/addRepo?url=https://vpm.nadena.dev/vpm.json) を追加してください。
+2. [`https://vpm.okitsu.net/index.json`](vcc://vpm/addRepo?url=https://vpm.okitsu.net/index.json) を追加していない場合は追加してください。
+3. Parameter Compressor パッケージを追加してください。
 
 ## 使用方法
 
@@ -46,9 +45,8 @@ ND Parameter Compressor は、VRChat アバターの Expression Parameters の�
 
 以下のパラメータは自動的に除外されます:
 
-- VRChat 標準パラメータ（IsLocal, Viseme, Voice, Gesture など）
-- Face Tracking v4 パラメータ
-- Face Tracking v5 パラメータ
+- [Face Tracking v4 パラメータ](https://docs.vrcft.io/docs/v4.0/category/parameters)
+- [Face Tracking v5 パラメータ](https://docs.vrcft.io/docs/category/parameters)
 
 ## クレジット
 
@@ -58,6 +56,3 @@ ND Parameter Compressor は、VRChat アバターの Expression Parameters の�
 
 詳細な変更履歴については、Releases ページを参照してください。
 
----
-
-*このREADMEはAIによって生成されました。*
