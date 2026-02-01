@@ -52,11 +52,6 @@ namespace okitsu.net.ndparamcompressor.Runtime
 
         public string[] ExcludedPropertyNamePrefixes = Array.Empty<string>();
         public string[] ExcludedPropertyNameSuffixes = Array.Empty<string>();
-
-        [HideInInspector]
-        public bool IsParametersDetected = false;
-        [HideInInspector]
-        public string LastParametersHash = "";
     }
 
     public static class NDParamCompSettingsExtensions

@@ -29,26 +29,19 @@ namespace okitsu.net.ndparamcompressor.Editor
 
             foreach (var settings in allSettings)
             {
-                if (settings == null || !settings.IsParametersDetected)
+                if (settings == null)
                 {
                     continue;
                 }
 
-                // パラメータハッシュを計算
-                string currentHash = NDParamCompSettingsEditor.CalculateParametersHashStatic(settings);
+                // 現在のパラメータ状態をスキャン
+                var currentParams = NDParamCompSettingsEditor.ScanParameters(settings, settings.ParameterGroups);
 
-                // ハッシュが変更されていたら自動更新
-                if (!string.IsNullOrEmpty(settings.LastParametersHash) &&
-                    settings.LastParametersHash != currentHash)
+                // 保存されているパラメータと比較（構造やコストに変更があるかチェック）
+                if (!NDParamCompSettingsEditor.AreParametersEquivalent(currentParams, settings.ParameterGroups))
                 {
                     Debug.Log($"{NDParamCompressorPass.LogPrefix} {settings.gameObject.name}: パラメータの変更を検出しました。");
                     NDParamCompSettingsEditor.DetectParametersStatic(settings, true);
-                }
-                else if (string.IsNullOrEmpty(settings.LastParametersHash))
-                {
-                    // 初回はハッシュを保存する
-                    settings.LastParametersHash = currentHash;
-                    EditorUtility.SetDirty(settings);
                 }
             }
         }

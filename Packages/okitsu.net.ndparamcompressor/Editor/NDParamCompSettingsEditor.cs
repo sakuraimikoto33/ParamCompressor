@@ -21,7 +21,6 @@ namespace okitsu.net.ndparamcompressor.Editor
         private SerializedProperty numbersPerState;
         private SerializedProperty sizingModeProp;
         private SerializedProperty maxSyncStepsProp;
-        private SerializedProperty isParametersDetected;
 
         private static int currentSceneInstanceID = -1;
         private static Dictionary<int, FoldoutStates> sceneStates = new();
@@ -48,7 +47,6 @@ namespace okitsu.net.ndparamcompressor.Editor
             numbersPerState = serializedObject.FindProperty("NumbersPerState");
             sizingModeProp = serializedObject.FindProperty("SizingMode");
             maxSyncStepsProp = serializedObject.FindProperty("MaxSyncSteps");
-            isParametersDetected = serializedObject.FindProperty("IsParametersDetected");
 
             var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
             int sceneID = scene.GetHashCode();
@@ -253,7 +251,7 @@ namespace okitsu.net.ndparamcompressor.Editor
                     EditorGUILayout.Space(3);
                 }
             }
-            else if (isParametersDetected.boolValue)
+            else
             {
                 EditorGUILayout.HelpBox("同期パラメータが見つかりませんでした。", MessageType.Warning);
             }
@@ -390,192 +388,6 @@ namespace okitsu.net.ndparamcompressor.Editor
             UpdateAutoSizingIfNeeded(settings, serializedObject);
         }
 
-        public static string CalculateParametersHashStatic(NDParamCompSettings settings)
-        {
-            var descriptor = GetAvatarDescriptorStatic(settings);
-            if (descriptor == null)
-            {
-                return "";
-            }
-
-            var hashBuilder = new System.Text.StringBuilder();
-
-            // アバターのExpressionParametersをハッシュに追加
-            if (descriptor.expressionParameters != null && descriptor.expressionParameters.parameters != null)
-            {
-                foreach (var param in descriptor.expressionParameters.parameters)
-                {
-                    if (param.networkSynced)
-                    {
-                        hashBuilder.Append($"{param.name}:{param.valueType}:{param.networkSynced};");
-                    }
-                }
-            }
-
-            // ModularAvatarParametersをハッシュに追加
-            try
-            {
-                var maParametersType = Type.GetType("nadena.dev.modular_avatar.core.ModularAvatarParameters, nadena.dev.modular-avatar.core");
-                if (maParametersType != null)
-                {
-                    var maComponents = descriptor.GetComponentsInChildren(maParametersType, true);
-                    foreach (var maComp in maComponents)
-                    {
-                        if (maComp == null)
-                        {
-                            continue;
-                        }
-
-                        var parametersField = maParametersType.GetField("parameters");
-                        if (parametersField == null)
-                        {
-                            continue;
-                        }
-
-                        var parametersObj = parametersField.GetValue(maComp);
-                        if (parametersObj == null)
-                        {
-                            continue;
-                        }
-
-                        if (parametersObj is not System.Collections.IList parametersList)
-                        {
-                            continue;
-                        }
-
-                        var gameObjectName = maComp.gameObject.name;
-                        hashBuilder.Append($"MA:{gameObjectName}:");
-
-                        var paramConfigType = parametersList[0]?.GetType();
-                        if (paramConfigType != null)
-                        {
-                            var nameField = paramConfigType.GetField("nameOrPrefix");
-                            var syncTypeField = paramConfigType.GetField("syncType");
-                            var localOnlyField = paramConfigType.GetField("localOnly");
-
-                            foreach (var paramConfig in parametersList)
-                            {
-                                if (paramConfig == null)
-                                {
-                                    continue;
-                                }
-
-                                var paramName = nameField?.GetValue(paramConfig) as string;
-                                var syncTypeValue = (int)(syncTypeField?.GetValue(paramConfig) ?? 0);
-                                var localOnly = (bool)(localOnlyField?.GetValue(paramConfig) ?? false);
-
-                                if (!string.IsNullOrEmpty(paramName) && syncTypeValue != 0 && !localOnly)
-                                {
-                                    hashBuilder.Append($"{paramName}:{syncTypeValue};");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            catch { }
-
-            // VRCFury Full Controllerをハッシュに追加
-            try
-            {
-                var vrcFuryType = Type.GetType("VF.Model.VRCFury, VRCFury");
-                var fullControllerType = Type.GetType("VF.Model.Feature.FullController, VRCFury");
-
-                if (vrcFuryType != null && fullControllerType != null)
-                {
-                    var vrcFuryComponents = descriptor.GetComponentsInChildren(vrcFuryType, true);
-                    foreach (var vrcFuryComp in vrcFuryComponents)
-                    {
-                        if (vrcFuryComp == null)
-                        {
-                            continue;
-                        }
-
-                        var contentField = vrcFuryType.GetField("content");
-                        if (contentField == null)
-                        {
-                            continue;
-                        }
-
-                        var contentObj = contentField.GetValue(vrcFuryComp);
-                        if (contentObj == null || !fullControllerType.IsInstanceOfType(contentObj))
-                        {
-                            continue;
-                        }
-
-                        var gameObjectName = vrcFuryComp.gameObject.name;
-                        hashBuilder.Append($"VF:{gameObjectName}:");
-
-                        // globalParamsをハッシュに追加
-                        var globalParamsField = fullControllerType.GetField("globalParams");
-                        if (globalParamsField != null)
-                        {
-                            var globalParamsObj = globalParamsField.GetValue(contentObj);
-                            if (globalParamsObj is List<string> globalParamsList)
-                            {
-                                foreach (var paramName in globalParamsList)
-                                {
-                                    if (!string.IsNullOrEmpty(paramName))
-                                    {
-                                        hashBuilder.Append($"{paramName};");
-                                    }
-                                }
-                            }
-                        }
-
-                        // prmsをハッシュに追加
-                        var prmsField = fullControllerType.GetField("prms");
-                        if (prmsField != null)
-                        {
-                            var prmsObj = prmsField.GetValue(contentObj);
-                            if (prmsObj is System.Collections.IList prmsList)
-                            {
-                                foreach (var entry in prmsList)
-                                {
-                                    if (entry == null)
-                                    {
-                                        continue;
-                                    }
-
-                                    var paramsEntryType = Type.GetType("VF.Model.Feature.FullController+ParamsEntry, VRCFury");
-                                    if (paramsEntryType != null)
-                                    {
-                                        var parametersField = paramsEntryType.GetField("parameters");
-                                        if (parametersField != null)
-                                        {
-                                            var paramWrapper = parametersField.GetValue(entry);
-                                            if (paramWrapper != null)
-                                            {
-                                                var objRefField = paramWrapper.GetType().GetField("objRef");
-                                                if (objRefField != null)
-                                                {
-                                                    var paramFile = objRefField.GetValue(paramWrapper) as VRCExpressionParameters;
-                                                    if (paramFile != null && paramFile.parameters != null)
-                                                    {
-                                                        hashBuilder.Append($"PF:{paramFile.name}:");
-                                                        foreach (var param in paramFile.parameters)
-                                                        {
-                                                            if (param.networkSynced && !string.IsNullOrEmpty(param.name))
-                                                            {
-                                                                hashBuilder.Append($"{param.name}:{param.valueType};");
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            catch { }
-
-            return hashBuilder.ToString();
-        }
-
         private static VRCAvatarDescriptor GetAvatarDescriptorStatic(NDParamCompSettings settings)
         {
             var descriptor = settings.GetComponentInParent<VRCAvatarDescriptor>();
@@ -603,25 +415,21 @@ namespace okitsu.net.ndparamcompressor.Editor
             DetectParametersInternal(settings, preserveSelections);
         }
 
-        private static void DetectParametersInternal(NDParamCompSettings settings, bool preserveSelections = true)
+        public static List<ParameterGroupInfo> ScanParameters(NDParamCompSettings settings, List<ParameterGroupInfo> oldGroups = null)
         {
             // VRCAvatarDescriptorを取得
             var descriptor = GetAvatarDescriptorStatic(settings);
 
             if (descriptor == null)
             {
-                EditorUtility.DisplayDialog("エラー",
-                    "VRCAvatarDescriptorが見つかりませんでした。\n" +
-                    "このコンポーネントをアバターのルートまたは子オブジェクトに配置してください。",
-                    "OK");
-                return;
+                return new List<ParameterGroupInfo>();
             }
 
             // 既存の選択状態を保存
             var existingSelections = new Dictionary<string, bool>();
-            if (preserveSelections && settings.ParameterGroups != null)
+            if (oldGroups != null)
             {
-                foreach (var g in settings.ParameterGroups)
+                foreach (var g in oldGroups)
                 {
                     foreach (var p in g.Parameters)
                     {
@@ -688,7 +496,7 @@ namespace okitsu.net.ndparamcompressor.Editor
                         null,
                         seenParamNames,
                         settings,
-                        preserveSelections,
+                        true,
                         existingSelections);
                 }
 
@@ -782,19 +590,6 @@ namespace okitsu.net.ndparamcompressor.Editor
                                 _ => 0
                             };
 
-                            // フィルター適用
-                            var fakeParam = new VRCExpressionParameters.Parameter
-                            {
-                                name = paramName,
-                                valueType = syncTypeValue switch
-                                {
-                                    1 => VRCExpressionParameters.ValueType.Int,
-                                    2 => VRCExpressionParameters.ValueType.Float,
-                                    3 => VRCExpressionParameters.ValueType.Bool,
-                                    _ => VRCExpressionParameters.ValueType.Float
-                                }
-                            };
-
                             TryAddParameter(
                                 maGroup,
                                 paramName,
@@ -803,7 +598,7 @@ namespace okitsu.net.ndparamcompressor.Editor
                                 maGroup.GroupLabel,
                                 seenParamNames,
                                 settings,
-                                preserveSelections,
+                                true,
                                 existingSelections);
                         }
 
@@ -1008,7 +803,7 @@ namespace okitsu.net.ndparamcompressor.Editor
                                 groupLabel,
                                 seenParamNames,
                                 settings,
-                                preserveSelections,
+                                true,
                                 existingSelections);
                         }
 
@@ -1034,13 +829,57 @@ namespace okitsu.net.ndparamcompressor.Editor
                 groups.Add(vrcFuryParentGroup);
             }
 
+            return groups;
+        }
+
+        public static bool AreParametersEquivalent(List<ParameterGroupInfo> groupsA, List<ParameterGroupInfo> groupsB)
+        {
+            if (groupsA == null && groupsB == null) return true;
+            if (groupsA == null || groupsB == null) return false;
+            if (groupsA.Count != groupsB.Count) return false;
+
+            for (int i = 0; i < groupsA.Count; i++)
+            {
+                var groupA = groupsA[i];
+                var groupB = groupsB[i];
+
+                if (groupA.GroupLabel != groupB.GroupLabel) return false;
+                if (groupA.GroupType != groupB.GroupType) return false;
+
+                if (groupA.Parameters.Count != groupB.Parameters.Count) return false;
+                for (int j = 0; j < groupA.Parameters.Count; j++)
+                {
+                    var paramA = groupA.Parameters[j];
+                    var paramB = groupB.Parameters[j];
+
+                    if (paramA.ParameterName != paramB.ParameterName) return false;
+                    if (paramA.ParameterType != paramB.ParameterType) return false;
+                    if (paramA.MemoryCost != paramB.MemoryCost) return false;
+                }
+
+                if (groupA.SubGroups.Count != groupB.SubGroups.Count) return false;
+                if (!AreParametersEquivalent(groupA.SubGroups, groupB.SubGroups)) return false;
+            }
+
+            return true;
+        }
+
+        private static void DetectParametersInternal(NDParamCompSettings settings, bool preserveSelections = true)
+        {
+            var groups = ScanParameters(settings, preserveSelections ? settings.ParameterGroups : null);
+
+            if (GetAvatarDescriptorStatic(settings) == null)
+            {
+                EditorUtility.DisplayDialog("エラー",
+                   "VRCAvatarDescriptorが見つかりませんでした。\n" +
+                   "このコンポーネントをアバターのルートまたは子オブジェクトに配置してください。",
+                   "OK");
+                return;
+            }
+
             // 結果を適用
             Undo.RecordObject(settings, "Update Parameters");
             settings.ParameterGroups = groups;
-            settings.IsParametersDetected = true;
-
-            // パラメータハッシュを更新
-            settings.LastParametersHash = CalculateParametersHashStatic(settings);
 
             EditorUtility.SetDirty(settings);
 
