@@ -14,6 +14,7 @@ namespace okitsu.net.ndparamcompressor.Runtime
         public bool Compress = true;
         public int MemoryCost;
         public string SourceComponentPath;
+        public string RemappedName;
     }
 
     [Serializable]

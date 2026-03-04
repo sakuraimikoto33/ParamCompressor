@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using UnityEditor;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
@@ -434,6 +436,8 @@ namespace okitsu.net.ndparamcompressor.Editor
                     foreach (var p in g.Parameters)
                     {
                         existingSelections[p.ParameterName] = p.Compress;
+                        if (!string.IsNullOrEmpty(p.RemappedName))
+                            existingSelections[p.RemappedName] = p.Compress;
                     }
                     // SubGroupsの選択状態も保存
                     if (g.SubGroups != null)
@@ -443,6 +447,8 @@ namespace okitsu.net.ndparamcompressor.Editor
                             foreach (var p in sg.Parameters)
                             {
                                 existingSelections[p.ParameterName] = p.Compress;
+                                if (!string.IsNullOrEmpty(p.RemappedName))
+                                    existingSelections[p.RemappedName] = p.Compress;
                             }
                         }
                     }
@@ -550,6 +556,8 @@ namespace okitsu.net.ndparamcompressor.Editor
                         var nameField = paramConfigType.GetField("nameOrPrefix");
                         var syncTypeField = paramConfigType.GetField("syncType");
                         var localOnlyField = paramConfigType.GetField("localOnly");
+                        var remapToField = paramConfigType.GetField("remapTo");
+                        var internalParameterField = paramConfigType.GetField("internalParameter");
 
                         foreach (var paramConfig in parametersList)
                         {
@@ -590,6 +598,18 @@ namespace okitsu.net.ndparamcompressor.Editor
                                 _ => 0
                             };
 
+                            var remapToValue = remapToField?.GetValue(paramConfig) as string;
+                            var internalParam = (bool)(internalParameterField?.GetValue(paramConfig) ?? false);
+                            string remappedName = null;
+                            if (internalParam)
+                            {
+                                remappedName = ComputeInternalParameterName(maComp, paramName);
+                            }
+                            else if (!string.IsNullOrEmpty(remapToValue))
+                            {
+                                remappedName = remapToValue;
+                            }
+
                             TryAddParameter(
                                 maGroup,
                                 paramName,
@@ -599,7 +619,8 @@ namespace okitsu.net.ndparamcompressor.Editor
                                 seenParamNames,
                                 settings,
                                 true,
-                                existingSelections);
+                                existingSelections,
+                                remappedName);
                         }
 
                         if (maGroup.Parameters.Count > 0)
@@ -855,6 +876,7 @@ namespace okitsu.net.ndparamcompressor.Editor
                     if (paramA.ParameterName != paramB.ParameterName) return false;
                     if (paramA.ParameterType != paramB.ParameterType) return false;
                     if (paramA.MemoryCost != paramB.MemoryCost) return false;
+                    if (paramA.RemappedName != paramB.RemappedName) return false;
                 }
 
                 if (groupA.SubGroups.Count != groupB.SubGroups.Count) return false;
@@ -914,7 +936,8 @@ namespace okitsu.net.ndparamcompressor.Editor
             HashSet<string> seenParamNames,
             NDParamCompSettings settings,
             bool preserveSelections,
-            Dictionary<string, bool> existingSelections)
+            Dictionary<string, bool> existingSelections,
+            string remappedName = null)
         {
             // VRChatビルトイン、VRCFTパラメータはリストに表示しない
             if (NDParamCompressorPass.ShouldSkipParam(paramName))
@@ -933,9 +956,13 @@ namespace okitsu.net.ndparamcompressor.Editor
             bool shouldCompress = false;
 
             // preserveSelections が有効でかつ既存選択がある場合は、フィルターの影響を受けない範囲で既存の選択を引き継ぐ
-            if (!excluded && preserveSelections && existingSelections.TryGetValue(paramName, out bool existingState))
+            if (!excluded && preserveSelections)
             {
-                shouldCompress = existingState;
+                if (existingSelections.TryGetValue(paramName, out bool existingState) ||
+                    (!string.IsNullOrEmpty(remappedName) && existingSelections.TryGetValue(remappedName, out existingState)))
+                {
+                    shouldCompress = existingState;
+                }
             }
 
             group.Parameters.Add(new ParameterCompressionInfo
@@ -944,10 +971,25 @@ namespace okitsu.net.ndparamcompressor.Editor
                 ParameterType = paramType,
                 Compress = shouldCompress,
                 MemoryCost = memoryCost,
-                SourceComponentPath = sourceComponentPath
+                SourceComponentPath = sourceComponentPath,
+                RemappedName = remappedName
             });
             seenParamNames.Add(paramName);
             return true;
+        }
+
+        // MAのinternalParameterによる自動リネーム後の名前を計算する
+        private static string ComputeInternalParameterName(Component component, string paramName)
+        {
+            if (component == null || string.IsNullOrEmpty(paramName)) return null;
+            var path = nadena.dev.ndmf.runtime.RuntimeUtil.AvatarRootPath(component.gameObject);
+            if (path == null) return null;
+
+            using var sha = SHA256.Create();
+            var hashBytes = sha.ComputeHash(Encoding.UTF8.GetBytes(path));
+            var sb = new StringBuilder();
+            for (var i = 0; i < 6; i++) sb.AppendFormat("{0:x2}", hashBytes[i]);
+            return paramName + "$" + sb.ToString();
         }
 
         private static bool ShouldExcludeStatic(string paramName, string paramType, NDParamCompSettings settings)
@@ -1112,8 +1154,11 @@ namespace okitsu.net.ndparamcompressor.Editor
             var typeProp = paramProp.FindPropertyRelative("ParameterType");
             var compressProp = paramProp.FindPropertyRelative("Compress");
             var costProp = paramProp.FindPropertyRelative("MemoryCost");
+            var remappedNameProp = paramProp.FindPropertyRelative("RemappedName");
 
             bool isExcluded = ShouldExcludeStatic(nameProp.stringValue, typeProp.stringValue, settings);
+            string remappedName = remappedNameProp?.stringValue;
+            bool hasRemap = !string.IsNullOrEmpty(remappedName);
 
             using (new EditorGUI.DisabledScope(isExcluded))
             {
@@ -1126,6 +1171,12 @@ namespace okitsu.net.ndparamcompressor.Editor
                 EditorGUILayout.PropertyField(compressProp, new GUIContent(labelText), GUILayout.MinWidth(nameWidth));
                 EditorGUILayout.LabelField($"[{typeProp.stringValue}]", GUILayout.Width(typeWidth));
                 EditorGUILayout.LabelField($"{costProp.intValue}bit", GUILayout.Width(costWidth));
+
+                if (hasRemap)
+                {
+                    var style = new GUIStyle(EditorStyles.miniLabel) { normal = { textColor = new Color(0.9f, 0.6f, 0.1f) } };
+                    EditorGUILayout.LabelField($"→ {remappedName}", style, GUILayout.MinWidth(100f));
+                }
             }
         }
     }

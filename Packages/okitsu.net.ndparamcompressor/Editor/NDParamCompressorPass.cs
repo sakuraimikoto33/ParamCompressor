@@ -266,7 +266,9 @@ namespace okitsu.net.ndparamcompressor.Editor
                 var selectedParamNames = new HashSet<string>(
                     settings.ParameterGroups.SelectMany(g =>
                         g.Parameters.Concat(g.SubGroups?.SelectMany(sg => sg.Parameters) ?? Enumerable.Empty<ParameterCompressionInfo>())
-                    ).Where(p => p.Compress).Select(p => p.ParameterName)
+                    ).Where(p => p.Compress)
+                    // RemappedNameが設定されている場合（MAのremapTo/internalParameter）はリネーム後の名前で処理
+                    .Select(p => !string.IsNullOrEmpty(p.RemappedName) ? p.RemappedName : p.ParameterName)
                 );
 
                 for (int i = 0; i < exprParams.Parameters.Count; i++)
