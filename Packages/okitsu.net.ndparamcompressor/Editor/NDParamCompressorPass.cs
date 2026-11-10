@@ -39,7 +39,7 @@ namespace okitsu.net.ndparamcompressor.Editor
         }
 
         public const string IsLocalName = "IsLocal";
-        public const string SyncPointerBoolName = "Oktnet/Sync/Ptr.bit";
+        public const string SyncPointerName = "Oktnet/Sync/Ptr";
         public const string SyncTrueName = "Oktnet/Sync/True";
         public const string SyncDataNumName = "Oktnet/Sync/DataNum";
         public const string SyncDataBoolName = "Oktnet/Sync/DataBool";
@@ -102,6 +102,16 @@ namespace okitsu.net.ndparamcompressor.Editor
             return bits;
         }
 
+        public static int GetPointerBitWidth(int stateCount)
+        {
+            if (stateCount <= 0)
+            {
+                return 0;
+            }
+
+            return Math.Max(GetRequiredPointerBits(stateCount), VRCExpressionParameters.Parameter.MinBitWidth);
+        }
+
         public List<UtilParameterInfo> Parameters { get; } = new();
 
         public void SetValues(VRCExpressionParameters vrcParams)
@@ -111,7 +121,7 @@ namespace okitsu.net.ndparamcompressor.Editor
             foreach (var param in vrcParams.parameters)
             {
                 if (VRChatParams.Contains(param.name) ||
-                    param.name.StartsWith(SyncPointerBoolName, StringComparison.InvariantCulture) ||
+                    SyncPointerName.Equals(param.name, StringComparison.InvariantCulture) ||
                     SyncTrueName.Equals(param.name, StringComparison.InvariantCulture) ||
                     param.name.StartsWith(SyncDataNumName, StringComparison.InvariantCulture) ||
                     param.name.StartsWith(SyncDataBoolName, StringComparison.InvariantCulture) ||
@@ -152,11 +162,11 @@ namespace okitsu.net.ndparamcompressor.Editor
             // 同期ポインタ用のビット数を決定する
             var stateCount = Math.Max(numbers.Count > 0 ? Mathf.CeilToInt((float)numbers.Count / numbersPerState) : 0,
                                      bools.Count > 0 ? Mathf.CeilToInt((float)bools.Count / boolsPerState) : 0);
-            var pointerBits = GetRequiredPointerBits(stateCount);
+            var pointerBits = GetPointerBitWidth(stateCount);
             var bitsToAdd = pointerBits +
                 (numbers.Count > 0 ? (8 * numbersPerState) : 0) +
                 (bools.Count > 0 ? boolsPerState : 0);
-            var bitsToRemove = numbers.Concat(bools).Sum(x => VRCExpressionParameters.TypeCost(x.SourceParam.valueType));
+            var bitsToRemove = numbers.Concat(bools).Sum(x => x.SourceParam.GetBitWidthByType());
 
             if (bitsToAdd >= bitsToRemove)
             {
@@ -301,17 +311,17 @@ namespace okitsu.net.ndparamcompressor.Editor
             Debug.Log($"{LogPrefix} WriteDefaults decision ({onStates} on | {offStates} off) = {makeStatesWD}");
 
             var stateCount = Math.Max(numBatches.Length, boolBatches.Length);
-            var pointerBits = UtilParameters.GetRequiredPointerBits(stateCount);
-            Debug.Log($"{LogPrefix} Pointer mode: Bool ({pointerBits} bits) for {stateCount} states");
+            var pointerBitWidth = UtilParameters.GetPointerBitWidth(stateCount);
+            Debug.Log($"{LogPrefix} Pointer mode: Int ({pointerBitWidth} bits) for {stateCount} states");
 
             var (localMachine, remoteMachine) = AddRequiredObjects(
                 animCtrl, paramDef, makeStatesWD, ctx,
                 numBatches.Length > 0 ? settings.GetEffectiveNumbersPerState() : 0,
                 boolBatches.Length > 0 ? settings.GetEffectiveBoolsPerState() : 0,
-                stateCount
+                pointerBitWidth
             );
 
-            ProcessParams(animCtrl, animCtrlPath, localMachine, remoteMachine, makeStatesWD, numBatches, boolBatches, pointerBits);
+            ProcessParams(animCtrl, animCtrlPath, localMachine, remoteMachine, makeStatesWD, numBatches, boolBatches);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -354,7 +364,7 @@ namespace okitsu.net.ndparamcompressor.Editor
 
         private static (AnimatorStateMachine local, AnimatorStateMachine remote) AddRequiredObjects(
             AnimatorController animCtrl, VRCExpressionParameters vrcParameters, bool makeStatesWD,
-            BuildContext ctx, int numbersPerState, int boolsPerState, int stateCount
+            BuildContext ctx, int numbersPerState, int boolsPerState, int pointerBitWidth
         )
         {
             if (!animCtrl.parameters.Any(x => x.name == UtilParameters.IsLocalName))
@@ -372,11 +382,7 @@ namespace okitsu.net.ndparamcompressor.Editor
                 });
             }
 
-            int requiredBits = UtilParameters.GetRequiredPointerBits(stateCount);
-            for (int i = 0; i < requiredBits; i++)
-            {
-                AddBoolParameter(animCtrl, vrcParameters, $"{UtilParameters.SyncPointerBoolName}{i}");
-            }
+            AddIntParameter(animCtrl, vrcParameters, UtilParameters.SyncPointerName, pointerBitWidth);
 
             for (int i = 0; i < numbersPerState; i++)
             {
@@ -424,8 +430,7 @@ namespace okitsu.net.ndparamcompressor.Editor
 
         private static void ProcessParams(
             AnimatorController animCtrl, string animCtrlPath, AnimatorStateMachine localMachine, AnimatorStateMachine remoteMachine,
-            bool makeStatesWD, UtilParameters.NumericParameter[][] numBatches, string[][] boolBatches,
-            int pointerBits
+            bool makeStatesWD, UtilParameters.NumericParameter[][] numBatches, string[][] boolBatches
         )
         {
             AnimatorState prevSetState = null;
@@ -436,8 +441,8 @@ namespace okitsu.net.ndparamcompressor.Editor
             for (int i = 0; i < stateCount; i++)
             {
                 var syncIndex = i;
-                var (setState, setDriver) = AddState(localMachine, syncIndex, currentSetPos, makeStatesWD, false, animCtrlPath, pointerBits);
-                var (getState, getDriver) = AddState(remoteMachine, syncIndex, currentGetPos, makeStatesWD, true, animCtrlPath, pointerBits);
+                var (setState, setDriver) = AddState(localMachine, syncIndex, currentSetPos, makeStatesWD, false, animCtrlPath);
+                var (getState, getDriver) = AddState(remoteMachine, syncIndex, currentGetPos, makeStatesWD, true, animCtrlPath);
 
                 var setStateExtraFrame = localMachine.AddState($"Extra Sync Frame #{syncIndex}",
                     currentSetPos + new Vector2(i == (stateCount - 1) ? ExtraFrameXPosOffsetLast : ExtraFrameXPosOffset, 0));
@@ -446,15 +451,7 @@ namespace okitsu.net.ndparamcompressor.Editor
                 CreateAndAssignDummyClip(setStateExtraFrame, animCtrlPath);
 
                 var entryTrans = remoteMachine.AddEntryTransition(getState);
-                for (int bit = 0; bit < pointerBits; bit++)
-                {
-                    bool bitValue = ((syncIndex >> bit) & 1) == 1;
-                    entryTrans.AddCondition(
-                        bitValue ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot,
-                        0,
-                        $"{UtilParameters.SyncPointerBoolName}{bit}"
-                    );
-                }
+                entryTrans.AddCondition(AnimatorConditionMode.Equals, syncIndex, UtilParameters.SyncPointerName);
 
                 var exitTrans = getState.AddExitTransition();
                 exitTrans.canTransitionToSelf = false;
@@ -583,14 +580,17 @@ namespace okitsu.net.ndparamcompressor.Editor
             return trans;
         }
 
-        private static void AddIntParameter(AnimatorController animCtrl, VRCExpressionParameters vrcParameters, string name)
+        private static void AddIntParameter(
+            AnimatorController animCtrl, VRCExpressionParameters vrcParameters, string name, int bitWidth = 8
+        )
         {
             if (!animCtrl.parameters.Any(x => x.name == name))
             {
                 animCtrl.AddParameter(name, AnimatorControllerParameterType.Int);
             }
 
-            if (!vrcParameters.parameters.Any(x => x.name == name))
+            var existingParameter = vrcParameters.parameters.FirstOrDefault(x => x.name == name);
+            if (existingParameter == null)
             {
                 List<VRCExpressionParameters.Parameter> syncedParamsList = new(vrcParameters.parameters)
                 {
@@ -600,10 +600,23 @@ namespace okitsu.net.ndparamcompressor.Editor
                         valueType = VRCExpressionParameters.ValueType.Int,
                         saved = false,
                         defaultValue = 0,
+                        bitWidth = (byte)bitWidth,
+                        flippedRepresentation = false,
                         networkSynced = true
                     }
                 };
                 vrcParameters.parameters = syncedParamsList.ToArray();
+                EditorUtility.SetDirty(vrcParameters);
+            }
+            else if (existingParameter.valueType != VRCExpressionParameters.ValueType.Int ||
+                     existingParameter.bitWidth != (byte)bitWidth ||
+                     existingParameter.flippedRepresentation ||
+                     !existingParameter.networkSynced)
+            {
+                existingParameter.valueType = VRCExpressionParameters.ValueType.Int;
+                existingParameter.bitWidth = (byte)bitWidth;
+                existingParameter.flippedRepresentation = false;
+                existingParameter.networkSynced = true;
                 EditorUtility.SetDirty(vrcParameters);
             }
         }
@@ -634,7 +647,7 @@ namespace okitsu.net.ndparamcompressor.Editor
         }
 
         private static (AnimatorState, VRCAvatarParameterDriver) AddState(
-            AnimatorStateMachine machine, int idx, Vector2 pos, bool makeStatesWD, bool isRemote, string animCtrlPath, int pointerBits
+            AnimatorStateMachine machine, int idx, Vector2 pos, bool makeStatesWD, bool isRemote, string animCtrlPath
         )
         {
             var state = machine.AddState($"{(isRemote ? "Remote Get" : "Local Set")} #{idx}", pos);
@@ -645,16 +658,12 @@ namespace okitsu.net.ndparamcompressor.Editor
 
             if (!isRemote)
             {
-                for (int bit = 0; bit < pointerBits; bit++)
+                driver.parameters.Add(new VRC_AvatarParameterDriver.Parameter
                 {
-                    bool bitValue = ((idx >> bit) & 1) == 1;
-                    driver.parameters.Add(new VRC_AvatarParameterDriver.Parameter
-                    {
-                        type = VRC_AvatarParameterDriver.ChangeType.Set,
-                        name = $"{UtilParameters.SyncPointerBoolName}{bit}",
-                        value = bitValue ? 1f : 0f
-                    });
-                }
+                    type = VRC_AvatarParameterDriver.ChangeType.Set,
+                    name = UtilParameters.SyncPointerName,
+                    value = idx
+                });
             }
 
             CreateAndAssignDummyClip(state, animCtrlPath);

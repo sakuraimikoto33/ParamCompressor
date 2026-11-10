@@ -498,7 +498,7 @@ namespace okitsu.net.ndparamcompressor.Editor
                         avatarGroup,
                         param.name,
                         param.valueType.ToString(),
-                        VRCExpressionParameters.TypeCost(param.valueType),
+                        param.GetBitWidthByType(),
                         null,
                         seenParamNames,
                         settings,
@@ -762,7 +762,7 @@ namespace okitsu.net.ndparamcompressor.Editor
                                     parametersToAdd.Add((
                                         param.name,
                                         param.valueType.ToString(),
-                                        VRCExpressionParameters.TypeCost(param.valueType)
+                                        param.GetBitWidthByType()
                                     ));
                                 }
                             }
@@ -797,7 +797,7 @@ namespace okitsu.net.ndparamcompressor.Editor
                                     {
                                         foundInPrms = true;
                                         paramType = matchingParam.valueType.ToString();
-                                        memoryCost = VRCExpressionParameters.TypeCost(matchingParam.valueType);
+                                        memoryCost = matchingParam.GetBitWidthByType();
                                         isNetworkSynced = matchingParam.networkSynced;
                                         break;
                                     }
@@ -1048,8 +1048,8 @@ namespace okitsu.net.ndparamcompressor.Editor
 
         private int CalculateCompressionEstimate(NDParamCompSettings settings, out int bitsToRemove)
         {
-            var numbers = new List<VRCExpressionParameters.ValueType>();
-            var bools = new List<VRCExpressionParameters.ValueType>();
+            var numbers = new List<ParameterCompressionInfo>();
+            var bools = new List<ParameterCompressionInfo>();
 
             // 圧縮対象パラメータを分類
             foreach (var p in settings.EnumerateCompressedParameters())
@@ -1061,11 +1061,11 @@ namespace okitsu.net.ndparamcompressor.Editor
 
                 if (vt == VRCExpressionParameters.ValueType.Bool)
                 {
-                    bools.Add(vt);
+                    bools.Add(p);
                 }
                 else
                 {
-                    numbers.Add(vt);
+                    numbers.Add(p);
                 }
             }
 
@@ -1082,7 +1082,7 @@ namespace okitsu.net.ndparamcompressor.Editor
                 bools.Clear();
             }
 
-            bitsToRemove = numbers.Concat(bools).Sum(x => VRCExpressionParameters.TypeCost(x));
+            bitsToRemove = numbers.Concat(bools).Sum(x => x.MemoryCost);
 
             // コスト計算: ポインターのオーバーヘッド（pointerBits） + ステートごとのInt/Float + ステートごとのBool
             int numBatches = numbers.Count > 0 ? Mathf.CeilToInt((float)numbers.Count / numbersPerState) : 0;
@@ -1090,7 +1090,7 @@ namespace okitsu.net.ndparamcompressor.Editor
             int stateCount = Math.Max(numBatches, boolBatches);
 
             // ポインタに必要なコストを計算
-            int pointerBits = UtilParameters.GetRequiredPointerBits(stateCount);
+            int pointerBits = UtilParameters.GetPointerBitWidth(stateCount);
 
             int bitsToAdd = 0;
             if (numbers.Count > 0 || bools.Count > 0)
